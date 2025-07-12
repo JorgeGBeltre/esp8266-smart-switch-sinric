@@ -1,146 +1,145 @@
+# 🔌 ESP8266 WiFi Smart Switch with SinricPro and Physical Control
 
-# 🔌 ESP8266 WiFi Smart Switch con SinricPro y Control Físico
-
-Este proyecto permite controlar dos dispositivos eléctricos mediante un módulo **ESP8266**. Integra conectividad con **SinricPro** para control remoto por voz (Alexa, Google Assistant) o desde la app, junto con control físico mediante botones y switches. El sistema incluye gestión automática de WiFi usando **WiFiManager**, soporte para modo AP, y un LED indicador de estado de red.
-
----
-
-## 🚀 Características principales
-
-- ✅ Control de **2 relés** vía SinricPro (Alexa/Google Assistant)
-- ✅ Botones físicos y switches para control manual
-- ✅ Pulsación larga para entrar en **modo configuración AP**
-- ✅ Estado de WiFi reflejado por LED (rápido, lento, fijo)
-- ✅ Restauración automática de estados de los relés al reinicio
-- ✅ Código modular y escalable usando `std::map`
-- ✅ Compatibilidad con múltiples dispositivos SinricPro
+This project allows you to control two electrical devices using an **ESP8266** module. It integrates **SinricPro** connectivity for remote control via voice (Alexa, Google Assistant) or the app, along with physical control using buttons and switches. The system includes automatic WiFi management using **WiFiManager**, AP mode support, and an LED indicator for network status.
 
 ---
 
-## 📦 Hardware necesario
+## 🚀 Main Features
 
-- ESP8266 (NodeMCU o Wemos D1 mini recomendado)
-- 2x Relés de 5V
-- 2x Botones físicos
+- ✅ Control **2 relays** via SinricPro (Alexa/Google Assistant)
+- ✅ Physical buttons and switches for manual control
+- ✅ Long press activates **WiFi configuration (AP) mode**
+- ✅ WiFi status is indicated by LED (fast, slow, solid)
+- ✅ Automatic restoration of relay states on restart
+- ✅ Modular and scalable code using `std::map`
+- ✅ Compatibility with multiple SinricPro devices
+
+---
+
+## 📦 Required Hardware
+
+- ESP8266 (NodeMCU or Wemos D1 mini recommended)
+- 2x 5V Relays
+- 2x Physical buttons
 - 2x Switches
-- 1x LED (indicador WiFi)
-- Resistencias (para pull-up si no usas INPUT_PULLUP)
-- Fuente de alimentación adecuada (5V/3.3V)
+- 1x LED (WiFi indicator)
+- Pull-up resistors (if not using `INPUT_PULLUP`)
+- Suitable power supply (5V/3.3V)
 
 ---
 
-## 🧠 Estructura del sistema
+## 🧠 System Architecture
 
-| Componente      | Función                                 |
-|------------------|------------------------------------------|
-| `SinricProSwitch` | Interfaz con SinricPro API               |
-| `WiFiManager`     | Gestión de conexión y modo configuración |
-| `std::map`        | Asociación de pines y dispositivos        |
-| `Relé`            | Salida controlada (ON/OFF)              |
-| `Botón físico`    | Control directo de relé + modo AP        |
-| `Switch`          | Control directo alternativo             |
-| `LED`             | Estado de red WiFi                      |
+| Component         | Function                                     |
+|------------------|----------------------------------------------|
+| `SinricProSwitch` | Interface with SinricPro API                 |
+| `WiFiManager`     | WiFi connection and configuration management |
+| `std::map`        | Pin and device association                   |
+| `Relay`           | Controlled output (ON/OFF)                   |
+| `Physical button` | Direct relay control + AP mode activation    |
+| `Switch`          | Alternative manual control                   |
+| `LED`             | WiFi network status                          |
 
 ---
 
-## 🔧 Pines configurados
+## 🔧 Configured Pins
 
 ```cpp
 RelayPin1     = GPIO13
 RelayPin2     = GPIO14
-BUTTON_PIN1   = GPIO0   // también puede actuar como botón de modo AP
+BUTTON_PIN1   = GPIO0   // can also act as AP mode button
 BUTTON_PIN2   = GPIO8
 SWITCH_PIN1   = GPIO6
 SWITCH_PIN2   = GPIO7
-wifiLed       = GPIO2   // Estado de WiFi
+wifiLed       = GPIO2   // WiFi status LED
 ```
 
-> ⚠️ Algunos pines pueden variar según el módulo ESP8266 usado. Asegúrate de verificar compatibilidad con tu hardware.
+> ⚠️ Some pins may vary depending on your ESP8266 board. Make sure to verify compatibility with your hardware.
 
 ---
 
-## ☁️ Integración con SinricPro
+## ☁️ SinricPro Integration
 
-Debes crear un proyecto en [SinricPro](https://portal.sinric.pro/) y obtener:
+Create a project in [SinricPro](https://portal.sinric.pro/) and obtain:
 
-- APP KEY
-- APP SECRET
-- Device IDs
+- APP KEY  
+- APP SECRET  
+- Device IDs  
 
-Ejemplo:
+Example:
 
 ```cpp
-#define APP_KEY       "TU_APP_KEY"
-#define APP_SECRET    "TU_APP_SECRET"
-#define device_ID_1   "ID_DISPOSITIVO_1"
-#define device_ID_2   "ID_DISPOSITIVO_2"
+#define APP_KEY       "YOUR_APP_KEY"
+#define APP_SECRET    "YOUR_APP_SECRET"
+#define device_ID_1   "DEVICE_ID_1"
+#define device_ID_2   "DEVICE_ID_2"
 ```
 
 ---
 
-## 🧠 Lógica de botones
+## 🧠 Button Logic
 
-- **Pulsación corta**: cambia el estado del relé (ON/OFF)
-- **Pulsación larga (> 3s)**: entra al modo AP con `WiFiManager` para configurar una nueva red
-
----
-
-## 💡 LED de estado WiFi
-
-| Estado           | Comportamiento del LED |
-|------------------|------------------------|
-| Sin conexión     | Parpadeo rápido        |
-| Conectando       | Parpadeo lento         |
-| Conectado        | Encendido fijo         |
+- **Short press**: toggles the relay state (ON/OFF)
+- **Long press (> 3s)**: enters AP mode using `WiFiManager` for network setup
 
 ---
 
-## 🛠️ Instalación
+## 💡 WiFi Status LED
 
-1. Clona este repositorio en tu entorno de desarrollo (Arduino IDE recomendado)
-2. Instala las siguientes bibliotecas desde el **Gestor de Bibliotecas**:
+| Status         | LED Behavior         |
+|----------------|----------------------|
+| Disconnected   | Fast blinking        |
+| Connecting     | Slow blinking        |
+| Connected      | Solid ON             |
+
+---
+
+## 🛠️ Installation
+
+1. Clone this repository into your development environment (Arduino IDE recommended)
+2. Install the following libraries from the **Library Manager**:
    - `ESP8266WiFi`
    - `WiFiManager`
    - `SinricPro`
-3. Configura tu `APP_KEY`, `APP_SECRET` y `device_IDs` en el código
-4. Carga el programa en tu ESP8266
-5. Mantén presionado el botón físico por 3 segundos si deseas ingresar al modo AP
+3. Set your `APP_KEY`, `APP_SECRET`, and `device_IDs` in the code
+4. Upload the sketch to your ESP8266
+5. Hold the physical button for 3 seconds to enter AP mode if needed
 
 ---
 
-## 🔄 Flujo de ejecución
+## 🔄 Execution Flow
 
-1. Inicialización de pines y estructuras
-2. Intento de conexión WiFi usando credenciales previas
-3. Si falla, el botón puede activar el modo AP para nueva configuración
-4. Una vez conectado, se inicializa SinricPro
-5. En el bucle principal:
-   - Se actualiza el estado del LED WiFi
-   - Se monitorean botones y switches
-   - Se mantiene activa la comunicación con SinricPro
-
----
-
-## 🛡️ Seguridad
-
-Este código expone credenciales como `APP_SECRET`. **Reemplázalas por valores reales y evita compartirlas públicamente.**
+1. Initialize pins and structures
+2. Attempt to reconnect to WiFi using stored credentials
+3. If it fails, the button can activate AP mode for new configuration
+4. Once connected, SinricPro is initialized
+5. Inside the main loop:
+   - WiFi LED status is updated
+   - Buttons and switches are monitored
+   - SinricPro communication remains active
 
 ---
 
-## 📄 Licencia
+## 🛡️ Security
 
-Este proyecto está bajo la licencia MIT. Consulta el archivo [LICENSE](LICENSE) para más información.
-
----
-
-## 🤝 Contribuciones
-
-¿Tienes ideas para mejorar el proyecto? ¡Tus pull requests y sugerencias son bienvenidas!
+This code includes credentials like `APP_SECRET`. **Be sure to replace them with your real values and never share them publicly.**
 
 ---
 
-## 📞 Contacto
+## 📄 License
 
-Autor: **Jorge Gaspar Beltre Rivera**  
-Proyecto: Automatización de interruptores con ESP8266 + SinricPro  
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+
+---
+
+## 🤝 Contributions
+
+Got ideas to improve the project? Pull requests and suggestions are welcome!
+
+---
+
+## 📞 Contact
+
+Author: **Jorge Gaspar Beltre Rivera**  
+Project: Smart Switch Automation with ESP8266 + SinricPro  
 GitHub: [github.com/JorgeBeltre](https://github.com/JorgeBeltre)
