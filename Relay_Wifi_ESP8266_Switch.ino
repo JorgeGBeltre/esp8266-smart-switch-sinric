@@ -13,10 +13,10 @@
 #include "SinricProSwitch.h"
 #include <map>
 
-#define APP_KEY       "9529d69f-654d-4cdf-9e03-2778703acce1"
-#define APP_SECRET    "3a530804-fbc1-45b7-ae01-a63e1b9cd234-53b693a0-6a6d-4a31-95ec-2afb10afdef1"
-#define device_ID_1   "676b410013f98f1416156643"
-#define device_ID_2   "66b67fbe54041e4ff61a52a9"
+#define APP_KEY       "YOUR_APP_KEY"
+#define APP_SECRET    "YOUR_APP_SECRET"
+#define device_ID_1   "DEVICE_ID_1"
+#define device_ID_2   "DEVICE_ID_2"
 
 #define RelayPin1     13  
 #define RelayPin2     14 
