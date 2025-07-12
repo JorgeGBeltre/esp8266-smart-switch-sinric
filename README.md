@@ -142,4 +142,4 @@ Got ideas to improve the project? Pull requests and suggestions are welcome!
 
 Author: **Jorge Gaspar Beltre Rivera**  
 Project: Smart Switch Automation with ESP8266 + SinricPro  
-GitHub: [github.com/JorgeBeltre](https://github.com/JorgeBeltre)
+GitHub: [github.com/JorgeBeltre](https://github.com/JorgeGBeltre)
