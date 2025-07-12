@@ -1,0 +1,30 @@
+# Arduino-related
+*.elf
+*.hex
+*.bin
+*.eep
+*.map
+*.srec
+*.d
+*.dSYM/
+*.gz
+*.zip
+*.tar.gz
+__pycache__/
+*.pyc
+
+# IDE specific files
+*.swp
+*.bak
+*.tmp
+
+# PlatformIO
+.pio/
+.vscode/
+
+# Arduino CI Build cache
+build/
+
+# Arduino Sketchbook metadata
+.DS_Store
+*.ino.*
