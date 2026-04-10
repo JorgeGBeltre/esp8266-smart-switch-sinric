@@ -18,13 +18,15 @@
 #define device_ID_1   "DEVICE_ID_1"
 #define device_ID_2   "DEVICE_ID_2"
 
-#define RelayPin1     13  
-#define RelayPin2     14 
-#define BUTTON_PIN1   0  
-#define BUTTON_PIN2   8 
-#define SWITCH_PIN1   6  
-#define SWITCH_PIN2   7  
-#define wifiLed       2  
+
+#define RelayPin1     5   
+#define RelayPin2     4   
+#define BUTTON_PIN1   0   
+#define BUTTON_PIN2   14  
+#define SWITCH_PIN1   12 
+#define SWITCH_PIN2   13  
+#define wifiLed       2   
+
 #define DEBOUNCE_TIME 50
 #define BUTTON_LONG_PRESS_TIME 3000  
 
@@ -59,11 +61,20 @@ unsigned long previousMillis = 0;
 const int fastBlinkInterval = 100;  
 const int slowBlinkInterval = 400; 
 
+
+unsigned long lastSinricProReconnect = 0;
+const unsigned long SINRICPRO_RECONNECT_INTERVAL = 30000; 
+
+
+unsigned long lastWiFiRetry = 0;
+const unsigned long WIFI_RETRY_INTERVAL = 10000; 
+
 void setupRelays() {
   for (auto &device : devices) {
     int relayPIN = device.second.relayPIN;
     pinMode(relayPIN, OUTPUT);
     digitalWrite(relayPIN, LOW);
+    Serial.printf("Relé en pin %d configurado\n", relayPIN);
   }
 }
 
@@ -78,22 +89,31 @@ void setupButtons() {
     int buttonPIN = device.second.buttonPIN;
     buttons[buttonPIN] = buttonConfig;
     pinMode(buttonPIN, INPUT_PULLUP);
+    Serial.printf("Botón en pin %d configurado para dispositivo %s\n", buttonPIN, device.first.c_str());
   }
-
 
   pinMode(SWITCH_PIN1, INPUT_PULLUP);
   pinMode(SWITCH_PIN2, INPUT_PULLUP);
+  Serial.printf("Switches configurados en pines %d y %d\n", SWITCH_PIN1, SWITCH_PIN2);
 }
 
 bool onPowerState(String deviceId, bool &state) {
-  Serial.printf("%s: %s\r\n", deviceId.c_str(), state ? "on" : "off");
-  int relayPIN = devices[deviceId].relayPIN;
-  digitalWrite(relayPIN, state ? HIGH : LOW);
-  return true;
+  Serial.printf("%s: %s\r\n", deviceId.c_str(), state ? "ON" : "OFF");
+  
+  if (devices.find(deviceId) != devices.end()) {
+    int relayPIN = devices[deviceId].relayPIN;
+    digitalWrite(relayPIN, state ? HIGH : LOW);
+    Serial.printf("Relé en pin %d cambiado a %s\n", relayPIN, state ? "HIGH" : "LOW");
+    return true;
+  }
+  
+  Serial.printf("ERROR: Device ID %s no encontrado\n", deviceId.c_str());
+  return false;
 }
 
 void handleButtons() {
   unsigned long actualMillis = millis();
+  
   for (auto &button : buttons) {
     int buttonPIN = button.first;
     bool lastButtonState = button.second.lastButtonState;
@@ -103,33 +123,50 @@ void handleButtons() {
       if (!button.second.isButtonPressed) {
         button.second.buttonPressStartTime = actualMillis;
         button.second.isButtonPressed = true;
+        Serial.printf("Botón en pin %d presionado\n", buttonPIN);
       }
-    } else if (buttonState == HIGH && lastButtonState == LOW) {
+    } 
+    else if (buttonState == HIGH && lastButtonState == LOW) {
       unsigned long pressDuration = actualMillis - button.second.buttonPressStartTime;
       button.second.isButtonPressed = false;
+      Serial.printf("Botón en pin %d liberado - Duración: %lu ms\n", buttonPIN, pressDuration);
+
 
       if (pressDuration > BUTTON_LONG_PRESS_TIME) {
-        Serial.println("Botón presionado por largo tiempo. Activando modo AP...");
+        Serial.println(" BOTÓN PRESIONADO POR LARGO TIEMPO - ACTIVANDO MODO AP ");
+        digitalWrite(wifiLed, LOW);
         WiFiManager wifiManager;
-
+        
         uint64_t chipID = ESP.getChipId(); 
         String apSSID = "VESIS-" + String(chipID);
         const char* apPassword = "12345678";
-
+        
+        Serial.printf("AP SSID: %s\n", apSSID.c_str());
+        wifiManager.setConfigPortalTimeout(180);
         wifiManager.startConfigPortal(apSSID.c_str(), apPassword);
-        Serial.println("Modo AP finalizado. Reiniciando...");
+        
+        Serial.println("Modo AP finalizado. Reiniciando ESP...");
+        delay(1000);
         ESP.restart();
-      } else if (pressDuration > DEBOUNCE_TIME) {
+      } 
+      
+      else if (pressDuration > DEBOUNCE_TIME) {
         String deviceId = button.second.deviceId;
-        int relayPIN = devices[deviceId].relayPIN;
-        bool newRelayState = !digitalRead(relayPIN);  
-        digitalWrite(relayPIN, newRelayState);  
+        
+        if (devices.find(deviceId) != devices.end()) {
+          int relayPIN = devices[deviceId].relayPIN;
+          bool newRelayState = !digitalRead(relayPIN);  
+          digitalWrite(relayPIN, newRelayState);  
+          
+          Serial.printf(" Botón %s - Cambiando relé a: %s \n", 
+                       deviceId.c_str(), newRelayState ? "ON" : "OFF");
 
-        Serial.printf("Estado del relé de %s cambiado a: %s\n", deviceId.c_str(), newRelayState ? "ON" : "OFF");
-
-        if (WiFi.status() == WL_CONNECTED) {
-          SinricProSwitch &mySwitch = SinricPro[deviceId];
-          mySwitch.sendPowerStateEvent(newRelayState);  
+          if (WiFi.status() == WL_CONNECTED && SinricPro.isConnected()) {
+            SinricProSwitch &mySwitch = SinricPro[deviceId];
+            mySwitch.sendPowerStateEvent(newRelayState);
+          } else {
+            Serial.println("SinricPro no conectado - evento no enviado");
+          }
         }
       }
     }
@@ -141,42 +178,33 @@ void handleButtons() {
 void handleSwitches() {
   static bool lastSwitchState1 = HIGH, lastSwitchState2 = HIGH;
   static unsigned long lastSwitchChangeTime1 = 0, lastSwitchChangeTime2 = 0;
-
   unsigned long currentMillis = millis();
 
- 
   bool currentSwitchState1 = digitalRead(SWITCH_PIN1);
-  bool currentSwitchState2 = digitalRead(SWITCH_PIN2);
-
-  
   if (currentSwitchState1 != lastSwitchState1 && (currentMillis - lastSwitchChangeTime1 > DEBOUNCE_TIME)) {
     lastSwitchChangeTime1 = currentMillis;
     if (currentSwitchState1 == LOW) {
-      int relayPIN = RelayPin1;  
-      bool newRelayState = !digitalRead(relayPIN);
-      digitalWrite(relayPIN, newRelayState);
-      Serial.printf("Estado del relé 1 cambiado a: %s\n", newRelayState ? "ON" : "OFF");
-
-      if (WiFi.status() == WL_CONNECTED) {
+      bool newRelayState = !digitalRead(RelayPin1);
+      digitalWrite(RelayPin1, newRelayState);
+      Serial.printf("*** Switch 1 - Cambiando relé 1 a: %s ***\n", newRelayState ? "ON" : "OFF");
+      if (WiFi.status() == WL_CONNECTED && SinricPro.isConnected()) {
         SinricProSwitch &mySwitch = SinricPro[device_ID_1];
-        mySwitch.sendPowerStateEvent(newRelayState);  
+        mySwitch.sendPowerStateEvent(newRelayState);
       }
     }
     lastSwitchState1 = currentSwitchState1;
   }
 
-  
+  bool currentSwitchState2 = digitalRead(SWITCH_PIN2);
   if (currentSwitchState2 != lastSwitchState2 && (currentMillis - lastSwitchChangeTime2 > DEBOUNCE_TIME)) {
     lastSwitchChangeTime2 = currentMillis;
     if (currentSwitchState2 == LOW) {
-      int relayPIN = RelayPin2;  
-      bool newRelayState = !digitalRead(relayPIN);
-      digitalWrite(relayPIN, newRelayState);
-      Serial.printf("Estado del relé 2 cambiado a: %s\n", newRelayState ? "ON" : "OFF");
-
-      if (WiFi.status() == WL_CONNECTED) {
+      bool newRelayState = !digitalRead(RelayPin2);
+      digitalWrite(RelayPin2, newRelayState);
+      Serial.printf("*** Switch 2 - Cambiando relé 2 a: %s ***\n", newRelayState ? "ON" : "OFF");
+      if (WiFi.status() == WL_CONNECTED && SinricPro.isConnected()) {
         SinricProSwitch &mySwitch = SinricPro[device_ID_2];
-        mySwitch.sendPowerStateEvent(newRelayState);  
+        mySwitch.sendPowerStateEvent(newRelayState);
       }
     }
     lastSwitchState2 = currentSwitchState2;
@@ -204,83 +232,117 @@ void updateWiFiLED() {
   }
 }
 
-void reconnectWiFi() {
-  if (WiFi.status() != WL_CONNECTED) {
-    if (currentWiFiStatus != WIFI_CONNECTING) {
-      Serial.println("Intentando reconectar al WiFi...");
-      currentWiFiStatus = WIFI_CONNECTING;
-      WiFi.begin();
-    }
+void attemptWiFiConnection() {
+  Serial.println("Intentando conectar a WiFi con credenciales guardadas...");
+  WiFi.begin();
+  currentWiFiStatus = WIFI_CONNECTING;
+  
+  unsigned long startAttempt = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 10000) {
+    delay(100);
+    updateWiFiLED(); 
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("WiFi conectado exitosamente");
+    Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
+    currentWiFiStatus = WIFI_CONNECTED;
   } else {
-    if (currentWiFiStatus != WIFI_CONNECTED) {
-      Serial.println("Reconexión al WiFi exitosa");
-      currentWiFiStatus = WIFI_CONNECTED;  
+    Serial.println("Fallo conexión WiFi");
+    currentWiFiStatus = WIFI_DISCONNECTED;
+    WiFi.disconnect();
+  }
+}
+
+void setupWiFi() {
+ 
+  if (WiFi.SSID() != "") {
+    Serial.printf("Red guardada encontrada: %s\n", WiFi.SSID().c_str());
+    attemptWiFiConnection();
+  } else {
+   
+    Serial.println("No hay redes WiFi guardadas. Activando modo AP para configuración inicial...");
+    digitalWrite(wifiLed, LOW);
+    WiFiManager wifiManager;
+    uint64_t chipID = ESP.getChipId(); 
+    String apSSID = "VESIS-" + String(chipID);
+    const char* apPassword = "12345678";
+    wifiManager.setConfigPortalTimeout(180);
+    wifiManager.startConfigPortal(apSSID.c_str(), apPassword);
+    Serial.println("Configuración completada. Reiniciando...");
+    delay(1000);
+    ESP.restart();
+  }
+}
+
+void reconnectWiFi() {
+  if (WiFi.status() != WL_CONNECTED && currentWiFiStatus != WIFI_CONNECTING) {
+    unsigned long currentMillis = millis();
+    if (currentMillis - lastWiFiRetry >= WIFI_RETRY_INTERVAL) {
+      lastWiFiRetry = currentMillis;
+      Serial.println("Reintentando conexión WiFi...");
+      attemptWiFiConnection();
     }
   }
 }
 
 void updateWiFiStatus() {
-  if (WiFi.status() != WL_CONNECTED) {
+  if (WiFi.status() == WL_CONNECTED) {
+    if (currentWiFiStatus != WIFI_CONNECTED) {
+      currentWiFiStatus = WIFI_CONNECTED;
+      Serial.println("WiFi conectado");
+    }
+  } else {
     if (currentWiFiStatus == WIFI_CONNECTED) {
-      Serial.println("Conexión al WiFi perdida");
+      Serial.println("Conexión WiFi perdida");
       currentWiFiStatus = WIFI_DISCONNECTED;
     }
     reconnectWiFi();
   }
 }
 
-void restoreRelayStates() {
-  for (auto &device : devices) {
-    int relayPIN = device.second.relayPIN;
-    bool relayState = digitalRead(relayPIN); 
-    Serial.printf("Restaurando estado del relé %d: %s\n", relayPIN, relayState ? "ON" : "OFF");
-    SinricProSwitch &mySwitch = SinricPro[device.first.c_str()];
-    mySwitch.sendPowerStateEvent(relayState); 
+void handleSinricProReconnection() {
+  unsigned long currentMillis = millis();
+  if (WiFi.status() == WL_CONNECTED && !SinricPro.isConnected() && 
+      (currentMillis - lastSinricProReconnect >= SINRICPRO_RECONNECT_INTERVAL)) {
+    lastSinricProReconnect = currentMillis;
+    Serial.println("Reconectando SinricPro...");
+    SinricPro.begin(APP_KEY, APP_SECRET);
   }
 }
 
-void setupWiFi() {
-  WiFiManager wifiManager;
-
-  uint64_t chipID = ESP.getChipId(); 
-  String apSSID = "VESIS-" + String(chipID);
-  const char* apPassword = "12345678";
-
-  currentWiFiStatus = WIFI_CONNECTING;  
-
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Intentando reconectar con credenciales guardadas...");
-    WiFi.begin();
-    unsigned long startAttemptTime = millis();
-
-    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 3000) {
+void restoreRelayStates() {
+  delay(1000);
+  for (auto &device : devices) {
+    int relayPIN = device.second.relayPIN;
+    bool relayState = digitalRead(relayPIN); 
+    Serial.printf("Restaurando estado del relé para %s (pin %d): %s\n", 
+                 device.first.c_str(), relayPIN, relayState ? "ON" : "OFF");
+    if (SinricPro.isConnected()) {
+      SinricProSwitch &mySwitch = SinricPro[device.first.c_str()];
+      mySwitch.sendPowerStateEvent(relayState);
       delay(100);
     }
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("Conectado al WiFi");
-    currentWiFiStatus = WIFI_CONNECTED;  
-  } else {
-    Serial.println("No se pudo conectar al WiFi. Modo AP desactivado por defecto.");
-    currentWiFiStatus = WIFI_DISCONNECTED;
   }
 }
 
 void setupSinricPro() {
+  Serial.println("Configurando SinricPro...");
   for (auto &device : devices) {
     const char *deviceId = device.first.c_str();
     SinricProSwitch &mySwitch = SinricPro[deviceId];
     mySwitch.onPowerState(onPowerState);
+    Serial.printf("Dispositivo %s configurado\n", deviceId);
   }
-
   SinricPro.begin(APP_KEY, APP_SECRET);
   SinricPro.restoreDeviceStates(true);
-  restoreRelayStates();
+  Serial.println("SinricPro inicializado");
 }
 
 void setup() {
-  DEBUG_ESP_PORT.begin(115200);
+  Serial.begin(115200);
+  Serial.println("\n\n INICIANDO ESP8266 \n");
+  
   pinMode(wifiLed, OUTPUT);
   digitalWrite(wifiLed, LOW);
 
@@ -288,12 +350,15 @@ void setup() {
   setupButtons();
   setupWiFi();
   setupSinricPro();
+  
+  Serial.println(" SETUP COMPLETADO \n");
 }
 
 void loop() {
   updateWiFiLED();
   updateWiFiStatus();
+  handleSinricProReconnection();
   SinricPro.handle();
   handleButtons();
-  handleSwitches();  
+  handleSwitches();
 }
